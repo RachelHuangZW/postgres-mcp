@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "postgres-mcp": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/path/to/postgres-mcp",
+        "python",
+        "-m",
+        "postgres_mcp.server"
+      ],
+      "env": {
+        "DATABASE_URL": "postgresql://user:password@localhost:5432/dbname"
+      }
+    }
+  }
+}
