@@ -151,6 +151,10 @@ Tests use mocked database connections and do not require a live PostgreSQL insta
 - **Database:** PostgreSQL via `psycopg2`
 - **Package manager:** uv
 
+## How this was built
+
+This project was built with Claude Code as a pair-programming partner. I designed the architecture (two-layer tool exposure, separation of `db.py` vs `db_client.py`), made all technical decisions (MCP framework choice, LangGraph integration approach, security boundaries), and iterated on implementation with AI assistance. Every design decision documented in this README reflects my own thinking about MCP server design and enterprise database tool exposure.
+
 ## Security Note
 
 `execute_query` runs arbitrary SQL. Use a read-only database role in production or restrict access to trusted users only.
