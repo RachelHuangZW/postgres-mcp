@@ -3,7 +3,7 @@ import json
 import psycopg2.extras
 
 from .db import get_connection
-
+from .agent.graph import app as agent_graph
 
 def execute_query(sql: str) -> str:
     conn = get_connection()
@@ -78,3 +78,25 @@ def get_table_schema(table_name: str, schema: str = "public") -> str:
         return "\n".join(lines)
     finally:
         conn.close()
+
+
+def analyze_query(sql: str, ddl: str, table_name: str = "") -> str:
+    """Run the SQL-Surgeon pipeline and return optimization advice."""
+    initial_state = {
+        "original_sql": sql,
+        "ddl": ddl,
+        "table_name": table_name,
+        "issues": [],
+        "advice": [],
+        "retry_count": 0,
+    }
+
+    final_state = agent_graph.invoke(initial_state)
+
+    return json.dumps({
+        "issues": final_state.get("issues"),
+        "advice": final_state.get("advice"),
+        "optimized_sql": final_state.get("optimized_sql"),
+        "benchmark_result": final_state.get("benchmark_result"),
+        "error": final_state.get("error"),
+    }, indent=2)

@@ -26,6 +26,12 @@ def get_table_schema(table_name: str, schema: str = "public") -> str:
     return tools.get_table_schema(table_name, schema)
 
 
+@mcp.tool()
+def analyze_query(sql: str, ddl: str, table_name: str = "") -> str:
+    """Analyze a slow SQL query using SQL-Surgeon and return optimization advice."""
+    return tools.analyze_query(sql, ddl, table_name )
+
+
 def main() -> None:
     mcp.run()
 
