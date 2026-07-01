@@ -1,38 +1,93 @@
 # postgres-mcp
 
-An [MCP](https://modelcontextprotocol.io) server that exposes PostgreSQL query, EXPLAIN, and schema inspection tools to Claude Desktop (or any MCP-compatible client).
+An [MCP](https://modelcontextprotocol.io) server that connects Claude Desktop to a PostgreSQL database, exposing both direct query tools and an AI-powered query optimization pipeline built on [SQL-Surgeon](https://github.com/RachelHuangZW/SQL-Surgeon).
 
-## Tools
+## What it does
+
+This project wraps two layers of capability into a single MCP server:
+
+**Layer 1 — Direct database tools:** Claude can execute SQL, inspect execution plans, and query table schemas against a live PostgreSQL database.
+
+**Layer 2 — AI query optimization pipeline:** Claude can invoke a multi-step LangGraph agent (SQL-Surgeon) that analyzes a slow query, identifies performance bottlenecks, generates optimization advice, self-reviews the advice for quality, and optionally benchmarks the result in a sandbox schema.
+
+The MCP interface means Claude decides which tool to use based on the user's question — no manual tool selection needed.
+
+## Architecture
+
+```
+Claude Desktop
+      │
+      │  MCP protocol
+      ▼
+  server.py          ← tool registration + MCP entry point
+      │
+  tools.py           ← tool logic
+      │
+  ┌───┴────────────────────────┐
+  │                            │
+db.py                    agent/graph.py
+(direct DB connection)   (LangGraph pipeline)
+                              │
+               ┌──────────────┼──────────────┐
+               ▼              ▼              ▼
+          run_explain   identify_issues  generate_advice
+               │              │              │
+               └──────────────┴──────────────┘
+                              │
+                        review_advice  ←─── retry loop (max 2x)
+                              │
+                   generate_benchmark_schema (optional)
+```
+
+## MCP Tools
 
 | Tool | Parameters | Description |
-|---|---|---|
-| `execute_query` | `sql` | Run any SQL statement; SELECT returns rows as JSON, DML returns affected row count |
-| `explain_query` | `sql`, `analyze` (bool, default `false`) | Get the query execution plan. When `analyze=true` runs `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)` |
-| `get_table_schema` | `table_name`, `schema` (default `"public"`) | List columns (type, nullability, default) and indexes for a table |
+|------|------------|-------------|
+| `execute_query` | `sql` | Run any SQL; SELECT returns JSON rows, DML returns affected row count |
+| `explain_query` | `sql`, `analyze` (bool, default `false`) | Get query execution plan; `analyze=true` runs `EXPLAIN (ANALYZE, BUFFERS)` |
+| `get_table_schema` | `table_name`, `schema` (default `"public"`) | List columns, types, nullability, defaults, and indexes |
+| `analyze_query` | `sql`, `ddl`, `table_name` (optional) | Run full SQL-Surgeon optimization pipeline; returns issues, advice, optimized SQL, and optional benchmark |
 
-## Project layout
+## SQL-Surgeon Pipeline
+
+`analyze_query` invokes a 5-node LangGraph graph:
+
+1. **run_explain** — executes `EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)` against the real database
+2. **identify_issues** — sends the execution plan + DDL to Gemini 2.5 Pro; returns a JSON array of identified bottlenecks (missing indexes, sequential scans, row count misestimation, etc.)
+3. **generate_advice** — generates specific optimization recommendations and a complete optimized SQL script (index DDL + rewritten query)
+4. **review_advice** — a second LLM call acting as a senior DBA reviewer; returns `pass` or `retry` with feedback; retries up to 2 times
+5. **generate_benchmark_schema** (optional) — clones the target table into a temporary schema, applies the suggested DDL, and re-runs EXPLAIN to compare plans
+
+## Project Layout
 
 ```
 src/postgres_mcp/
-  server.py   # FastMCP entry point, tool registrations
-  tools.py    # SQL execution logic
-  db.py       # Connection helper (reads DATABASE_URL)
+    server.py           # MCP entry point, tool registrations
+    tools.py            # Tool logic; calls db.py and agent/
+    db.py               # Connection helper (reads DATABASE_URL)
+    db_client.py        # DBClient used by the agent pipeline
+    agent/
+        graph.py        # LangGraph graph definition
+        nodes.py        # 5 node functions
+        state.py        # AgentState TypedDict
+        prompts.py      # System prompts for each LLM node
 tests/
-  test_tools.py
+    test_tools.py       # Unit tests with mocked DB connections
 examples/
-  claude_desktop_config.json
+    claude_desktop_config.json
 ```
 
 ## Setup
 
-### 1. Prerequisites
+### Prerequisites
 
 - Python 3.10+
 - [uv](https://docs.astral.sh/uv/) — `brew install uv`
 - A running PostgreSQL instance
-- [Claude Desktop](https://claude.ai/download) (or another MCP client)
+- [Claude Desktop](https://claude.ai/download)
+- A Google API key (Gemini 2.5 Pro) for `analyze_query`
 
-### 2. Clone and install
+### Install
 
 ```bash
 git clone https://github.com/RachelHuangZW/postgres-mcp
@@ -40,44 +95,44 @@ cd postgres-mcp
 uv sync
 ```
 
-### 3. Configure your database
+### Configure environment
 
-Copy `.env.example` to `.env` and fill in your connection string:
+Create `.env` in the project root:
 
-```bash
-cp .env.example .env
-# edit .env: DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+```
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+GOOGLE_API_KEY=your-google-api-key
 ```
 
-### 4. Register with Claude Desktop
+### Register with Claude Desktop
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` and merge in the `mcpServers` block (see `examples/claude_desktop_config.json`):
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "postgres-mcp": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/postgres-mcp", "python", "-m", "postgres_mcp.server"],
-      "env": {
-        "DATABASE_URL": "postgresql://user:password@localhost:5432/dbname"
-      }
+      "args": [
+        "run",
+        "--directory", "/path/to/postgres-mcp",
+        "--env-file", "/path/to/postgres-mcp/.env",
+        "python", "-m", "postgres_mcp.server"
+      ]
     }
   }
 }
 ```
 
-Replace `/path/to/postgres-mcp` with the absolute path to this repo and fill in your `DATABASE_URL`. Then **fully quit and reopen Claude Desktop**.
+Fully quit and reopen Claude Desktop after saving.
 
-> **Tip:** You can also run the server directly with `uv run postgres-mcp` after `uv sync`.
+### Verify
 
-### 5. Verify
+Open Claude Desktop and ask:
 
-Open a new Claude Desktop conversation and ask:
+> "What MCP tools do you have available?"
 
-> "Use get_table_schema to show me the schema for the users table."
-
-Claude should call the tool and return the column list.
+Claude should list all four tools.
 
 ## Development
 
@@ -86,6 +141,16 @@ uv sync --group dev
 uv run pytest
 ```
 
-## Security note
+Tests use mocked database connections and do not require a live PostgreSQL instance.
 
-`execute_query` runs whatever SQL you pass — use a **read-only database role** in production, or restrict access to trusted users only.
+## Tech Stack
+
+- **MCP framework:** [FastMCP](https://github.com/jlowin/fastmcp)
+- **Agent framework:** [LangGraph](https://github.com/langchain-ai/langgraph)
+- **LLM:** Gemini 2.5 Pro via `langchain-google-genai`
+- **Database:** PostgreSQL via `psycopg2`
+- **Package manager:** uv
+
+## Security Note
+
+`execute_query` runs arbitrary SQL. Use a read-only database role in production or restrict access to trusted users only.
