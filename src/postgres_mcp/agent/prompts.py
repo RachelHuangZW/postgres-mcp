@@ -5,6 +5,9 @@ Common issues to look for:
 - Large Cartesian products from poorly written JOINs
 - Sorting that spills to disk (External merge Disk)
 - Large discrepancy between estimated and actual row counts
+- Index recommendation on low-selectivity filters: if a filter's selectivity > 0.3 (more than 30% of rows match),
+  an index is likely unhelpful — the planner will prefer a sequential scan anyway.
+  Check the Filter Selectivity input before recommending an index.
 
 Return ONLY a JSON array with no explanation or extra text, in this format:
 ["issue description 1", "issue description 2", "issue description 3"]"""

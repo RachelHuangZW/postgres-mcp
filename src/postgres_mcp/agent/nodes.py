@@ -20,6 +20,30 @@ llm = ChatGoogleGenerativeAI(
     temperature=0.1,
 )
 
+def extract_filter_selectivity(plan_json):
+    results = []
+    def walk(node):
+        if "Rows Removed by Filter" in node and "Actual Rows" in node:
+            actual = node["Actual Rows"]
+            removed = node["Rows Removed by Filter"]
+            total = actual + removed
+            if total > 0:
+                results.append({
+                    "node_type": node.get("Node Type", "Unknown"),
+                    "relation": node.get("Relation Name", ""),
+                    "actual_rows": actual,
+                    "rows_removed": removed,
+                    "selectivity": round(actual / total, 4)
+                })
+        for child in node.get("Plans", []):
+            walk(child)
+    
+    if plan_json and len(plan_json) > 0:
+        walk(plan_json[0]["Plan"])
+
+    return results
+
+
 def strip_code_block(text: str) -> str:
     text = text.strip()
     if text.startswith("```"):
@@ -46,6 +70,7 @@ def run_explain_node(state: AgentState):
 
         return {
             "explain_output": plan,
+            "filter_selectivity": extract_filter_selectivity(plan),
             "error": None
         }
     except Exception as e:
@@ -58,7 +83,7 @@ def identify_issues(state: AgentState):
     # Node 2: use LLM to identify DB issues from EXPLAIN PLAN
     prompt = ChatPromptTemplate.from_messages([
         ("system", ANALYSIS_PROMPT),
-        ("user", "DDL: {ddl}\nExecution_Plan: {execution_plan}\nPrevious feedback: {feedback}")
+        ("user", "DDL: {ddl}\nExecution_Plan: {execution_plan}\nFilter Selectivity: {filter_selectivity}\nPrevious feedback: {feedback}")
     ])
 
     chain = prompt | llm
@@ -66,6 +91,7 @@ def identify_issues(state: AgentState):
     response = chain.invoke({
         "ddl": state.get("ddl"),
         "execution_plan": state.get("explain_output"),
+        "filter_selectivity": state.get("filter_selectivity") or [],
         "feedback": state.get("feedback") or "None"
     })
     
