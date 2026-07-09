@@ -5,6 +5,9 @@ Common issues to look for:
 - Large Cartesian products from poorly written JOINs
 - Sorting that spills to disk (External merge Disk)
 - Large discrepancy between estimated and actual row counts
+- Index recommendation on low-selectivity filters: if a filter's selectivity > 0.3 (more than 30% of rows match),
+  an index is likely unhelpful — the planner will prefer a sequential scan anyway.
+  Check the Filter Selectivity input before recommending an index.
 
 Return ONLY a JSON array with no explanation or extra text, in this format:
 ["issue description 1", "issue description 2", "issue description 3"]"""
@@ -33,6 +36,7 @@ Evaluate the advice against these criteria:
 2. Does each piece of advice directly address one of the identified issues?
 3. Does optimized_sql include both Step 1 (index DDL) and Step 2 (optimized query), with correct syntax that can be executed immediately?
 4. Is the index design sound (correct column order, DESC/ASC direction, covers the query's filter and sort conditions)?
+5. Selectivity check: if the advice recommends an index for a filter where selectivity > 0.3 (more than 30% of rows match the filter), that index recommendation is wrong — reject it with verdict "retry" and explain that the planner will ignore a low-selectivity index.
 
 Return ONLY a JSON object with no explanation or extra text, in this format:
 {{

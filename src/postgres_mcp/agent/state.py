@@ -12,6 +12,7 @@ class AgentState(TypedDict):
     verdict: Optional[str]
     feedback: Optional[str]
     retry_count: int
+    filter_Selectivity: Optional[List[dict]]
     error: Optional[str]
 
 
