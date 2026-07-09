@@ -34,14 +34,14 @@ def get_table_schema(table_name: str, schema: str = "public") -> str:
 
 @mcp.tool()
 def analyze_query(sql: str, ddl: str = "", table_name: str = "") -> str:
-    """Analyze a slow SQL query using SQL-Surgeon and return optimization advice."""
+    """Analyzes a slow SQL query and returns optimization advice. DDL is optional — the tool automatically fetches the schema for tables referenced in the query if not provided. Use this whenever the user asks for query optimization, regardless of whether they have the DDL handy."""
     return tools.analyze_query(sql, ddl, table_name)
 
 
 @mcp.tool()
-def get_slow_queries(limit: int = 5) -> str:
-    """Return the slowest SQL queries by mean execution time from pg_stat_statements."""
-    return tools.get_slow_queries(limit)
+def get_slow_queries(limit: int = 5, include_system_queries: bool = False) -> str:
+    """Return the slowest SQL queries by mean execution time from pg_stat_statements. System and diagnostic queries are excluded by default; set include_system_queries=true to include them."""
+    return tools.get_slow_queries(limit, include_system_queries)
 
 def main() -> None:
     mcp.run()

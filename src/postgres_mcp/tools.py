@@ -159,12 +159,18 @@ def analyze_query(sql: str, ddl: str = "", table_name: str = "") -> str:
     }, indent=2)
 
 
-def get_slow_queries(limit: int = 5) -> str:
+def get_slow_queries(limit: int = 5, include_system_queries: bool = False) -> str:
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(
-                """
+            filter_clause = "" if include_system_queries else """
+                AND query NOT ILIKE 'CREATE EXTENSION%'
+                AND query NOT ILIKE '%information_schema%'
+                AND query NOT ILIKE '%pg_catalog%'
+                AND query NOT ILIKE 'EXPLAIN%'
+                AND query NOT ILIKE '%pg_stat_statements%'
+            """
+            cur.execute(f"""
                 SELECT
                     query,
                     calls,
@@ -173,16 +179,15 @@ def get_slow_queries(limit: int = 5) -> str:
                     round(stddev_exec_time::numeric, 2) AS stddev_ms,
                     rows
                 FROM pg_stat_statements
+                WHERE calls > 0
+                {filter_clause}
                 ORDER BY mean_exec_time DESC
                 LIMIT %s
-            """, (limit,)
-            )
+            """, (limit,))
             rows = cur.fetchall()
             if not rows:
                 return "pg_stat_statements is empty or not enabled"
-            return json.dumps(
-                    [dict(r) for r in rows], default=str
-            , indent=2)
+            return json.dumps([dict(r) for r in rows], default=str, indent=2)
     except Exception as e:
         if "pg_stat_statements" in str(e):
             return "pg_stat_statements extension is not enabled. Run: CREATE EXTENSION pg_stat_statements;"
