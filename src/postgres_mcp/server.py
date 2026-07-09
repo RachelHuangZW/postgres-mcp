@@ -21,6 +21,12 @@ def explain_query(sql: str, analyze: bool = False) -> str:
 
 
 @mcp.tool()
+def list_tables(schema: str = "public") -> str:
+    """List all tables in a PostgreSQL schema."""
+    return tools.list_tables(schema)
+
+
+@mcp.tool()
 def get_table_schema(table_name: str, schema: str = "public") -> str:
     """Get columns and indexes for a PostgreSQL table."""
     return tools.get_table_schema(table_name, schema)

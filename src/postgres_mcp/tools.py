@@ -80,6 +80,27 @@ def get_table_schema(table_name: str, schema: str = "public") -> str:
         conn.close()
 
 
+def list_tables(schema: str = "public") -> str:
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = %s AND table_type = 'BASE TABLE'
+                ORDER BY table_name
+                """,
+                (schema,),
+            )
+            tables = [row[0] for row in cur.fetchall()]
+            if not tables:
+                return f"No tables found in schema '{schema}'"
+            return "\n".join(tables)
+    finally:
+        conn.close()
+        
+
 def analyze_query(sql: str, ddl: str, table_name: str = "") -> str:
     """Run the SQL-Surgeon pipeline and return optimization advice."""
     initial_state = {
