@@ -19,24 +19,24 @@ Claude Desktop
       │
       │  MCP protocol
       ▼
-  server.py          ← tool registration + MCP entry point
+  server.py              ← tool registration + MCP entry point
       │
-  tools.py           ← tool logic
+  tools.py               ← tool logic
       │
-  ┌───┴────────────────────────┐
-  │                            │
-db.py                    agent/graph.py
-(direct DB connection)   (LangGraph pipeline)
-                              │
-               ┌──────────────┼──────────────┐
-               ▼              ▼              ▼
-          run_explain   identify_issues  generate_advice
-               │              │              │
-               └──────────────┴──────────────┘
-                              │
-                        review_advice  ←─── retry loop (max 2x)
-                              │
-                   generate_benchmark_schema (optional)
+  ┌───┴──────────────────────────────────┐
+  │                                      │
+db.py                            agent/graph.py
+(Layer 1: direct tools)          (Layer 2: LangGraph pipeline)
+  │                                      │
+  ├── execute_query          ┌───────────┼───────────┐
+  ├── explain_query          ▼           ▼           ▼
+  ├── list_tables       run_explain  identify_issues  generate_advice
+  ├── get_table_schema       │           │           │
+  └── get_slow_queries       └───────────┴───────────┘
+                                         │
+                                   review_advice  ←── retry loop (max 2x)
+                                         │
+                            generate_benchmark_schema (optional)
 ```
 
 ## MCP Tools
