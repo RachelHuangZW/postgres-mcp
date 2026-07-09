@@ -45,8 +45,10 @@ db.py                    agent/graph.py
 |------|------------|-------------|
 | `execute_query` | `sql` | Run any SQL; SELECT returns JSON rows, DML returns affected row count |
 | `explain_query` | `sql`, `analyze` (bool, default `false`) | Get query execution plan; `analyze=true` runs `EXPLAIN (ANALYZE, BUFFERS)` |
+| `list_tables` | `schema` (default `"public"`) | List all tables in a schema |
 | `get_table_schema` | `table_name`, `schema` (default `"public"`) | List columns, types, nullability, defaults, and indexes |
-| `analyze_query` | `sql`, `ddl`, `table_name` (optional) | Run full SQL-Surgeon optimization pipeline; returns issues, advice, optimized SQL, and optional benchmark |
+| `get_slow_queries` | `limit` (default `5`) | Return the slowest queries by mean execution time from `pg_stat_statements` |
+| `analyze_query` | `sql`, `ddl` (optional, auto-fetched if omitted), `table_name` (optional) | Run full SQL-Surgeon optimization pipeline; returns issues, advice, optimized SQL, and optional benchmark |
 
 ## SQL-Surgeon Pipeline
 
@@ -132,7 +134,7 @@ Open Claude Desktop and ask:
 
 > "What MCP tools do you have available?"
 
-Claude should list all four tools.
+Claude should list all six tools.
 
 ## Development
 
