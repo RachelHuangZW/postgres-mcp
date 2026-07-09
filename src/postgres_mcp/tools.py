@@ -99,10 +99,46 @@ def list_tables(schema: str = "public") -> str:
             return "\n".join(tables)
     finally:
         conn.close()
-        
 
-def analyze_query(sql: str, ddl: str, table_name: str = "") -> str:
+
+def _fetch_ddl_for_tables(table_names: list) -> str:
+    """Get DDL for tables, when not provided by user."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            parts = []
+            for table in table_names:
+                cur.execute(
+                    """
+                    SELECT column_name, data_type, is_nullable, column_default
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = %s
+                    ORDER BY ordinal_position
+                    """,
+                    (table,),
+                )
+                cols = cur.fetchall()
+                #print(cols)
+                if cols:
+                    col_defs = ", ".join(f"{c[0]} {c[1]} {'NOT NULL' if c[2] == 'NO' else 'NULL'}"+ (f" DEFAULT {c[3]}" if c[3] else "")for c in cols)       
+                    parts.append(f"CREATE TABLE {table} ({col_defs});")
+            return "\n".join(parts)
+    finally:
+        conn.close()
+
+
+def _extract_table_names(sql: str) -> list:
+    import re
+    pattern = r'\b(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_]*)'
+    return list(set(re.findall(pattern, sql, re.IGNORECASE)))
+
+
+def analyze_query(sql: str, ddl: str = "", table_name: str = "") -> str:
     """Run the SQL-Surgeon pipeline and return optimization advice."""
+    if not ddl:
+        tables = _extract_table_names(sql)
+        ddl = _fetch_ddl_for_tables(tables)
+
     initial_state = {
         "original_sql": sql,
         "ddl": ddl,
@@ -121,3 +157,35 @@ def analyze_query(sql: str, ddl: str, table_name: str = "") -> str:
         "benchmark_result": final_state.get("benchmark_result"),
         "error": final_state.get("error"),
     }, indent=2)
+
+
+def get_slow_queries(limit: int = 5) -> str:
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT
+                    query,
+                    calls,
+                    round(total_exec_time::numeric, 2) AS total_ms,
+                    round(mean_exec_time::numeric, 2) AS mean_ms,
+                    round(stddev_exec_time::numeric, 2) AS stddev_ms,
+                    rows
+                FROM pg_stat_statements
+                ORDER BY mean_exec_time DESC
+                LIMIT %s
+            """, (limit,)
+            )
+            rows = cur.fetchall()
+            if not rows:
+                return "pg_stat_statements is empty or not enabled"
+            return json.dumps(
+                    [dict(r) for r in rows], default=str
+            , indent=2)
+    except Exception as e:
+        if "pg_stat_statements" in str(e):
+            return "pg_stat_statements extension is not enabled. Run: CREATE EXTENSION pg_stat_statements;"
+        raise
+    finally:
+        conn.close()

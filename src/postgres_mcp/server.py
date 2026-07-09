@@ -33,10 +33,15 @@ def get_table_schema(table_name: str, schema: str = "public") -> str:
 
 
 @mcp.tool()
-def analyze_query(sql: str, ddl: str, table_name: str = "") -> str:
+def analyze_query(sql: str, ddl: str = "", table_name: str = "") -> str:
     """Analyze a slow SQL query using SQL-Surgeon and return optimization advice."""
-    return tools.analyze_query(sql, ddl, table_name )
+    return tools.analyze_query(sql, ddl, table_name)
 
+
+@mcp.tool()
+def get_slow_queries(limit: int = 5) -> str:
+    """Return the slowest SQL queries by mean execution time from pg_stat_statements."""
+    return tools.get_slow_queries(limit)
 
 def main() -> None:
     mcp.run()
