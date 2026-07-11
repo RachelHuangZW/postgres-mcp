@@ -164,11 +164,11 @@ def get_slow_queries(limit: int = 5, include_system_queries: bool = False) -> st
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             filter_clause = "" if include_system_queries else """
-                AND query NOT ILIKE 'CREATE EXTENSION%'
-                AND query NOT ILIKE '%information_schema%'
-                AND query NOT ILIKE '%pg_catalog%'
-                AND query NOT ILIKE 'EXPLAIN%'
-                AND query NOT ILIKE '%pg_stat_statements%'
+                AND query NOT ILIKE 'CREATE EXTENSION%%'
+                AND query NOT ILIKE '%%information_schema%%'
+                AND query NOT ILIKE '%%pg_catalog%%'
+                AND query NOT ILIKE 'EXPLAIN%%'
+                AND query NOT ILIKE '%%pg_stat_statements%%'
             """
             cur.execute(f"""
                 SELECT
