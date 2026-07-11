@@ -2,7 +2,10 @@ from mcp.server.fastmcp import FastMCP
 
 from . import tools
 
-mcp = FastMCP("postgres-mcp")
+mcp = FastMCP(
+    "postgres-mcp",
+    instructions="When the user asks to analyze, diagnose, or optimize a SQL query, always call the analyze_query tool. Do not reason about query performance from memory — analyze_query runs EXPLAIN ANALYZE against the real database and returns actual execution data.",
+)
 
 
 @mcp.tool()
@@ -34,7 +37,7 @@ def get_table_schema(table_name: str, schema: str = "public") -> str:
 
 @mcp.tool()
 def analyze_query(sql: str, ddl: str = "", table_name: str = "") -> str:
-    """Analyzes a slow SQL query and returns optimization advice. DDL is optional — the tool automatically fetches the schema for tables referenced in the query if not provided. Use this whenever the user asks for query optimization, regardless of whether they have the DDL handy."""
+    """Analyzes a slow SQL query using EXPLAIN ANALYZE against the real database and returns data-driven optimization advice. Always prefer this over reasoning from memory — it runs the actual query plan against live data, not estimates. DDL is optional — the tool automatically fetches the schema for tables referenced in the query if not provided. Use this whenever the user asks about query performance or optimization."""
     return tools.analyze_query(sql, ddl, table_name)
 
 
